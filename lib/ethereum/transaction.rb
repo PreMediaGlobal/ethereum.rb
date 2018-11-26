@@ -1,7 +1,5 @@
 module Ethereum
-
   class Transaction
-
     DEFAULT_TIMEOUT = 300.seconds
     DEFAULT_STEP = 5.seconds
 
@@ -13,6 +11,8 @@ module Ethereum
       @id = id
       @input = data
       @input_parameters = input_parameters
+
+      mined? # check if it's mined at creating the instance
     end
 
     def address
@@ -21,14 +21,14 @@ module Ethereum
 
     def mined?
       return true if @mined
-      @mined = @connection.eth_get_transaction_by_hash(@id)["result"]["blockNumber"].present?
+      @mined = @connection.eth_get_transaction_by_hash(@id).dig('result', 'blockNumber').present?
     end
 
     def wait_for_miner(timeout: DEFAULT_TIMEOUT, step: DEFAULT_STEP)
       start_time = Time.now
       loop do
-        raise Timeout::Error if ((Time.now - start_time) > timeout)
-        return true if self.mined?
+        raise Timeout::Error if (Time.now - start_time) > timeout
+        return true if mined?
         sleep step
       end
     end
