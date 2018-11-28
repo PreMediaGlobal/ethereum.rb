@@ -2,7 +2,6 @@ require 'forwardable'
 
 module Ethereum
   class Contract
-
     attr_reader :address
     attr_accessor :key
     attr_accessor :gas_limit, :gas_price, :nonce
@@ -11,14 +10,14 @@ module Ethereum
     attr_accessor :call_raw_proxy, :call_proxy, :transact_proxy, :transact_and_wait_proxy
     attr_accessor :new_filter_proxy, :get_filter_logs_proxy, :get_filter_change_proxy
 
-    def initialize(name, code, abi, client = Ethereum::Singleton.instance)
+    def initialize(name, code, abi, client = Ethereum::Singleton.instance, sender=nil)
       @name = name
       @code = code
       @abi = abi
       @constructor_inputs, @functions, @events = Ethereum::Abi.parse_abi(abi)
       @formatter = Ethereum::Formatter.new
       @client = client
-      @sender = client.default_account
+      @sender = sender.presence || client.default_account
       @encoder = Encoder.new
       @decoder = Decoder.new
       @gas_limit = @client.gas_limit
@@ -52,10 +51,10 @@ module Ethereum
     #
     # @return [Ethereum::Contract] Returns a contract wrapper.
 
-    def self.create(file: nil, client: Ethereum::Singleton.instance, code: nil, abi: nil, address: nil, name: nil, contract_index: nil, truffle: nil)
+    def self.create(file: nil, client: Ethereum::Singleton.instance, code: nil, abi: nil, address: nil, name: nil, contract_index: nil, truffle: nil, sender: nil)
       contract = nil
       if file.present?
-        contracts = Ethereum::Initializer.new(file, client).build_all
+        contracts = Ethereum::Initializer.new(file, client, sender).build_all
         raise "No contracts compiled" if contracts.empty?
         if contract_index
           contract = contracts[contract_index].class_object.new
@@ -86,7 +85,7 @@ module Ethereum
         else
           abi = JSON.parse(abi) if abi.is_a? String
         end
-        contract = Ethereum::Contract.new(name, code, abi, client)
+        contract = Ethereum::Contract.new(name, code, abi, client, sender)
         contract.build
         contract = contract.class_object.new
       end
@@ -111,11 +110,12 @@ module Ethereum
     end
 
     def deploy_args(params)
-      add_gas_options_args({from: sender, data: deploy_payload(params)})
+      add_gas_options_args({from: @sender, data: deploy_payload(params)})
     end
 
     def send_transaction(tx_args)
-        @client.eth_send_transaction(tx_args)["result"]
+      tr = @client.eth_send_transaction(tx_args)
+      tr.dig('result')
     end
 
     def send_raw_transaction(payload, to = nil)
@@ -309,33 +309,34 @@ module Ethereum
     end
 
     private
-      def add_gas_options_args(args)
-        args[:gas] = @client.int_to_hex(gas_limit) if gas_limit.present?
-        args[:gasPrice] = @client.int_to_hex(gas_price) if gas_price.present?
-        args
-      end
 
-      def create_function_proxies
-        parent = self
-        call_raw_proxy, call_proxy, transact_proxy, transact_and_wait_proxy = Class.new, Class.new, Class.new, Class.new
-        @functions.each do |fun|
-          call_raw_proxy.send(:define_method, parent.function_name(fun)) { |*args| parent.call_raw(fun, *args) }
-          call_proxy.send(:define_method, parent.function_name(fun)) { |*args| parent.call(fun, *args) }
-          transact_proxy.send(:define_method, parent.function_name(fun)) { |*args| parent.transact(fun, *args) }
-          transact_and_wait_proxy.send(:define_method, parent.function_name(fun)) { |*args| parent.transact_and_wait(fun, *args) }
-        end
-        @call_raw_proxy, @call_proxy, @transact_proxy, @transact_and_wait_proxy =  call_raw_proxy.new, call_proxy.new, transact_proxy.new, transact_and_wait_proxy.new
-      end
+    def add_gas_options_args(args)
+      args[:gas] = @client.int_to_hex(gas_limit) if gas_limit.present?
+      args[:gasPrice] = @client.int_to_hex(gas_price) if gas_price.present?
+      args
+    end
 
-      def create_event_proxies
-        parent = self
-        new_filter_proxy, get_filter_logs_proxy, get_filter_change_proxy = Class.new, Class.new, Class.new
-        events.each do |evt|
-          new_filter_proxy.send(:define_method, evt.name.underscore) { |*args| parent.create_filter(evt, *args) }
-          get_filter_logs_proxy.send(:define_method, evt.name.underscore) { |*args| parent.get_filter_logs(evt, *args) }
-          get_filter_change_proxy.send(:define_method, evt.name.underscore) { |*args| parent.get_filter_changes(evt, *args) }
-        end
-        @new_filter_proxy, @get_filter_logs_proxy, @get_filter_change_proxy = new_filter_proxy.new, get_filter_logs_proxy.new, get_filter_change_proxy.new
+    def create_function_proxies
+      parent = self
+      call_raw_proxy, call_proxy, transact_proxy, transact_and_wait_proxy = Class.new, Class.new, Class.new, Class.new
+      @functions.each do |fun|
+        call_raw_proxy.send(:define_method, parent.function_name(fun)) { |*args| parent.call_raw(fun, *args) }
+        call_proxy.send(:define_method, parent.function_name(fun)) { |*args| parent.call(fun, *args) }
+        transact_proxy.send(:define_method, parent.function_name(fun)) { |*args| parent.transact(fun, *args) }
+        transact_and_wait_proxy.send(:define_method, parent.function_name(fun)) { |*args| parent.transact_and_wait(fun, *args) }
       end
+      @call_raw_proxy, @call_proxy, @transact_proxy, @transact_and_wait_proxy =  call_raw_proxy.new, call_proxy.new, transact_proxy.new, transact_and_wait_proxy.new
+    end
+
+    def create_event_proxies
+      parent = self
+      new_filter_proxy, get_filter_logs_proxy, get_filter_change_proxy = Class.new, Class.new, Class.new
+      events.each do |evt|
+        new_filter_proxy.send(:define_method, evt.name.underscore) { |*args| parent.create_filter(evt, *args) }
+        get_filter_logs_proxy.send(:define_method, evt.name.underscore) { |*args| parent.get_filter_logs(evt, *args) }
+        get_filter_change_proxy.send(:define_method, evt.name.underscore) { |*args| parent.get_filter_changes(evt, *args) }
+      end
+      @new_filter_proxy, @get_filter_logs_proxy, @get_filter_change_proxy = new_filter_proxy.new, get_filter_logs_proxy.new, get_filter_change_proxy.new
+    end
   end
 end
