@@ -10,7 +10,7 @@ module Ethereum
     attr_accessor :call_raw_proxy, :call_proxy, :transact_proxy, :transact_and_wait_proxy
     attr_accessor :new_filter_proxy, :get_filter_logs_proxy, :get_filter_change_proxy
 
-    def initialize(name, code, abi, client = Ethereum::Singleton.instance, sender=nil)
+    def initialize(name, code, abi, client = Ethereum::Singleton.instance, sender=nil, password=nil)
       @name = name
       @code = code
       @abi = abi
@@ -18,6 +18,7 @@ module Ethereum
       @formatter = Ethereum::Formatter.new
       @client = client
       @sender = sender.presence || client.default_account
+      @password = password
       @encoder = Encoder.new
       @decoder = Decoder.new
       @gas_limit = @client.gas_limit
@@ -51,10 +52,10 @@ module Ethereum
     #
     # @return [Ethereum::Contract] Returns a contract wrapper.
 
-    def self.create(file: nil, client: Ethereum::Singleton.instance, code: nil, abi: nil, address: nil, name: nil, contract_index: nil, truffle: nil, sender: nil)
+    def self.create(file: nil, client: Ethereum::Singleton.instance, code: nil, abi: nil, address: nil, name: nil, contract_index: nil, truffle: nil, sender: nil, password: nil)
       contract = nil
       if file.present?
-        contracts = Ethereum::Initializer.new(file, client, sender).build_all
+        contracts = Ethereum::Initializer.new(file, client, sender, password).build_all
         raise "No contracts compiled" if contracts.empty?
         if contract_index
           contract = contracts[contract_index].class_object.new
@@ -85,7 +86,7 @@ module Ethereum
         else
           abi = JSON.parse(abi) if abi.is_a? String
         end
-        contract = Ethereum::Contract.new(name, code, abi, client, sender)
+        contract = Ethereum::Contract.new(name, code, abi, client, sender, password)
         contract.build
         contract = contract.class_object.new
       end
@@ -114,7 +115,7 @@ module Ethereum
     end
 
     def send_transaction(tx_args)
-      tr = @client.eth_send_transaction(tx_args)
+      tr = @client.personal_send_transaction(tx_args, @password)
       tr.dig('result')
     end
 

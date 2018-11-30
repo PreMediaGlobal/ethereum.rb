@@ -3,7 +3,7 @@ module Ethereum
   class Initializer
     attr_accessor :contracts, :file, :client
 
-    def initialize(file, client = Ethereum::Singleton.instance, sender=nil)
+    def initialize(file, client = Ethereum::Singleton.instance, sender=nil, password=nil)
       @client = client
       sol_output = Solidity.new.compile(file)
       contracts = sol_output.keys
@@ -13,7 +13,7 @@ module Ethereum
         abi = JSON.parse(sol_output[contract]["abi"] )
         name = contract
         code = sol_output[contract]["bin"]
-        @contracts << Contract.new(name, code, abi, @client, sender)
+        @contracts << Contract.new(name, code, abi, @client, sender, password)
       end
     end
 
