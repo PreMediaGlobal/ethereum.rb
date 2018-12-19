@@ -1,5 +1,5 @@
 require 'forwardable'
-
+require 'pry'
 module Ethereum
   class Contract
     attr_reader :address
@@ -188,6 +188,7 @@ module Ethereum
 
     def transact(fun, *args)
       if key
+        binding.pry
         tx = send_raw_transaction(call_payload(fun, args), address)
       else
         tx = send_transaction(call_args(fun, args))
