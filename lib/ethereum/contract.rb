@@ -132,6 +132,7 @@ module Ethereum
         gas_price: gas_price
       }
       args[:to] = to if to
+      binding.pry
       tx = Eth::Tx.new(args)
       tx.sign key
       @client.eth_send_raw_transaction(tx.hex)["result"]
@@ -188,7 +189,6 @@ module Ethereum
 
     def transact(fun, *args)
       if key
-        binding.pry
         tx = send_raw_transaction(call_payload(fun, args), address)
       else
         tx = send_transaction(call_args(fun, args))
