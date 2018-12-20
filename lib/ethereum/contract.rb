@@ -1,5 +1,5 @@
 require 'forwardable'
-require 'pry'
+
 module Ethereum
   class Contract
     attr_reader :address
