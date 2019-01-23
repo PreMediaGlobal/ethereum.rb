@@ -99,6 +99,7 @@ module Ethereum
       }
       tx = Eth::Tx.new(args)
       tx.sign key
+      binding.pry
       eth_send_raw_transaction(tx.hex)["result"]
     end
 
