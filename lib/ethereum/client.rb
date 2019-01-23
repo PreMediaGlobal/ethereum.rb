@@ -99,7 +99,6 @@ module Ethereum
       }
       tx = Eth::Tx.new(args)
       tx.sign key
-      binding.pry
       eth_send_raw_transaction(tx.hex)["result"]
     end
 
@@ -127,7 +126,8 @@ module Ethereum
         output = JSON.parse(send_single(payload.to_json))
         @logger.info("Received #{output.to_json}") if @log
         reset_id
-        raise IOError, output["error"]["message"] if output["error"]
+        binding.pry if output["error"]
+        # raise IOError, output["error"]["message"] if output["error"]
         return output
       end
     end
